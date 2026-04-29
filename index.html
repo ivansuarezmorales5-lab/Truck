@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ASADOS TRUCK POS</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#d32f2f">
+
+<style>
+:root{
+  --primary:#d32f2f;
+  --dark:#333;
+  --light:#f0f2f5;
+  --success:#28a745;
+}
+
+body{
+  margin:0;
+  font-family: -apple-system, sans-serif;
+  background:var(--light);
+}
+
+.navbar{
+  background:var(--dark);
+  color:#fff;
+  padding:12px;
+  text-align:center;
+  font-weight:bold;
+  position:sticky;
+  top:0;
+}
+
+.mesa-selector{
+  display:flex;
+  overflow-x:auto;
+  gap:8px;
+  padding:10px;
+  background:#444;
+}
+
+.btn-mesa{
+  min-width:50px;
+  padding:10px;
+  border:none;
+  border-radius:8px;
+  background:#666;
+  color:#fff;
+  font-weight:bold;
+}
+
+.btn-mesa.activa{ background:var(--primary); }
+
+.container{ padding:10px; padding-bottom:220px; }
+
+.cuenta-firme{
+  background:#fffde7;
+  padding:10px;
+  border-radius:10px;
+  border:1px solid #fbc02d;
+  margin-bottom:10px;
+}
+
+.menu-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.producto-card{
+  background:#fff;
+  padding:10px;
+  border-radius:12px;
+  text-align:center;
+}
+
+.controles{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  margin-top:8px;
+}
+
+.btn-cant{
+  width:32px;
+  height:32px;
+  border:none;
+  border-radius:8px;
+  background:#ddd;
+}
+
+.footer-pos{
+  position:fixed;
+  bottom:0;
+  width:100%;
+  background:#fff;
+  padding:15px;
+  border-top:2px solid var(--primary);
+}
+
+.total-display{
+  text-align:center;
+  font-size:28px;
+  font-weight:bold;
+}
+
+.btn-main{
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:10px;
+  color:#fff;
+  font-weight:bold;
+  margin-top:5px;
+}
+
+/* ===== TICKET ===== */
+
+.ticket{
+  border-radius:0;
+  font-family: monospace;
+  background:#fff;
+  padding:20px;
+  max-width:340px;
+  width:90%;
+  margin:auto;
+}
+
+.ticket-header{
+  text-align:center;
+  font-weight:bold;
+  font-size:18px;
+}
+
+.ticket-sub{
+  font-size:11px;
+  color:#888;
+  text-align:center;
+}
+
+.ticket-line{
+  border-top:1px dashed #aaa;
+  margin:10px 0;
+}
+
+.ticket-row{
+  display:flex;
+  justify-content:space-between;
+  font-size:13px;
+  margin:3px 0;
+}
+
+.ticket-muted{
+  color:#777;
+  font-size:12px;
+}
+
+.ticket-total{
+  font-size:26px;
+  font-weight:bold;
+  text-align:center;
+  margin-top:5px;
+}
+
+.ticket-total-label{
+  text-align:center;
+  font-size:14px;
+  margin-top:10px;
+  font-weight:bold;
+}
+
+.modal{
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,.8);
+  justify-content:center;
+  align-items:center;
+}
+
+.modal-content{
+  background:#fff;
+  padding:20px;
+  width:90%;
+  max-width:350px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="navbar">ASADOS TRUCK</div>
+
+<div class="mesa-selector" id="lista-mesas"></div>
+
+<div class="container">
+  <div class="cuenta-firme">
+    <b>Mesa <span id="m-tit">1</span></b>
+    <div id="lista-firme"></div>
+  </div>
+
+  <div id="menu" class="menu-grid"></div>
+</div>
+
+<div class="footer-pos">
+  <div class="total-display" id="total-txt">$0</div>
+
+  <button class="btn-main" style="background:var(--success)" onclick="cargarAMesa()">CARGAR</button>
+  <button class="btn-main" style="background:#007bff" onclick="verFactura()">FACTURA</button>
+  <button class="btn-main" style="background:var(--dark)" onclick="abrirCierre()">PAGAR</button>
+</div>
+
+<!-- FACTURA -->
+<div id="modFact" class="modal">
+  <div class="modal-content ticket">
+    <div class="ticket-header">ASADOS TRUCK</div>
+    <div class="ticket-sub">FOOD TRUCK</div>
+
+    <div id="fact-body"></div>
+
+    <button onclick="closeModal('modFact')" class="btn-main" style="background:#333;margin-top:10px;">CERRAR</button>
+  </div>
+</div>
+
+<script>
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+
+const productos = [
+{ id:1,nombre:"Chorizote",precio:19000 },
+{ id:2,nombre:"Chicharrón",precio:25000 },
+{ id:3,nombre:"Cerdo 3XL",precio:25000 },
+{ id:4,nombre:"Res 3XL",precio:30000 },
+{ id:5,nombre:"Churrasco",precio:32000 },
+{ id:6,nombre:"Costichip",precio:33000 },
+{ id:7,nombre:"Chorizo 3XL",precio:35000 },
+{ id:8,nombre:"Punta de Anca",precio:36000 },
+{ id:9,nombre:"Chicharrón D.T.",precio:37000 },
+{ id:10,nombre:"Bebidas",precio:5000 },
+{ id:11,nombre:"Cerveza",precio:6000 },
+{ id:12,nombre:"Chocolate",precio:8000 },
+{ id:13,nombre:"Arepa",precio:3000 },
+{ id:14,nombre:"Papa",precio:3000 }
+];
+
+let mesasFirme = JSON.parse(localStorage.getItem("at"))||{};
+let tempSel={}, mesaActual=1;
+
+function init(){
+  const sel=document.getElementById("lista-mesas");
+
+  for(let i=1;i<=10;i++){
+    if(!mesasFirme[i])mesasFirme[i]=[];
+
+    tempSel[i]={};
+    productos.forEach(p=>tempSel[i][p.id]=0);
+
+    sel.innerHTML+=`<button class="btn-mesa" onclick="switchMesa(${i})" id="m${i}">M${i}</button>`;
+  }
+
+  switchMesa(1);
+}
+
+function switchMesa(n){
+  mesaActual=n;
+  document.querySelectorAll(".btn-mesa").forEach(b=>b.classList.remove("activa"));
+  document.getElementById("m"+n).classList.add("activa");
+  document.getElementById("m-tit").innerText=n;
+
+  renderMenu();
+  renderFirme();
+  updateTotal();
+}
+
+function renderMenu(){
+  let m=document.getElementById("menu");
+  m.innerHTML="";
+
+  productos.forEach(p=>{
+    let q=tempSel[mesaActual][p.id];
+
+    m.innerHTML+=`
+    <div class="producto-card">
+      <b>${p.nombre}</b>
+      <div>$${p.precio.toLocaleString()}</div>
+      <div class="controles">
+        <button onclick="qty(${p.id},-1)">-</button>
+        <b>${q}</b>
+        <button onclick="qty(${p.id},1)">+</button>
+      </div>
+    </div>`;
+  });
+}
+
+function qty(id,v){
+  if(tempSel[mesaActual][id]+v>=0){
+    tempSel[mesaActual][id]+=v;
+    renderMenu();
+    updateTotal();
+  }
+}
+
+function cargarAMesa(){
+  productos.forEach(p=>{
+    let q=tempSel[mesaActual][p.id];
+    if(q>0){
+      let ex=mesasFirme[mesaActual].find(i=>i.id===p.id);
+      if(ex)ex.cant+=q;
+      else mesasFirme[mesaActual].push({...p,cant:q});
+      tempSel[mesaActual][p.id]=0;
+    }
+  });
+
+  save();
+  renderMenu();
+  renderFirme();
+  updateTotal();
+}
+
+function renderFirme(){
+  let d=document.getElementById("lista-firme");
+  d.innerHTML="";
+
+  mesasFirme[mesaActual].forEach((i,idx)=>{
+    d.innerHTML+=`
+    <div>
+      ${i.cant}x ${i.nombre}
+      <button onclick="del(${idx})">X</button>
+    </div>`;
+  });
+}
+
+function del(i){
+  mesasFirme[mesaActual].splice(i,1);
+  save();
+  renderFirme();
+  updateTotal();
+}
+
+function updateTotal(){
+  let sub=0;
+  mesasFirme[mesaActual].forEach(i=>sub+=i.cant*i.precio);
+  document.getElementById("total-txt").innerText="$"+sub.toLocaleString();
+}
+
+/* ===== TICKET PRO FINAL ===== */
+
+function verFactura(){
+
+  let sub=0;
+  let items=[...mesasFirme[mesaActual]];
+  items.forEach(i=>sub+=i.cant*i.precio);
+
+  let prop=Math.round(sub*0.1);
+  let total=sub+prop;
+
+  let now=new Date();
+
+  let html="";
+
+  html+=`<div class="ticket-muted">${now.toLocaleDateString()} ${now.toLocaleTimeString()}</div>`;
+  html+=`<div class="ticket-line"></div>`;
+
+  items.forEach(i=>{
+    let t=i.cant*i.precio;
+    html+=`
+    <div class="ticket-row">
+      <div>${i.cant}x ${i.nombre}</div>
+      <div>$${t.toLocaleString()}</div>
+    </div>`;
+  });
+
+  html+=`<div class="ticket-line"></div>`;
+
+  html+=`
+  <div class="ticket-row"><div>SUBTOTAL</div><div>$${sub.toLocaleString()}</div></div>`;
+
+  html+=`
+  <div class="ticket-row ticket-muted"><div>SERVICIO</div><div>$${prop.toLocaleString()}</div></div>`;
+
+  html+=`<div class="ticket-line"></div>`;
+
+  html+=`<div class="ticket-total-label">TOTAL</div>`;
+  html+=`<div class="ticket-total">$${total.toLocaleString()}</div>`;
+
+  document.getElementById("fact-body").innerHTML=html;
+  document.getElementById("modFact").style.display="flex";
+}
+
+function save(){
+  localStorage.setItem("at",JSON.stringify(mesasFirme));
+}
+
+function closeModal(id){
+  document.getElementById(id).style.display="none";
+}
+
+init();
+
+</script>
+
+</body>
+</html>
