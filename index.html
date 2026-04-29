@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ASADOS TRUCK POS</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#d32f2f">
+
+    <style>
+        :root { --primary: #d32f2f; --dark: #333; --light: #f0f2f5; --success: #28a745; }
+        body { font-family: -apple-system, sans-serif; background: var(--light); margin:0; padding:0; }
+        .navbar { background: var(--dark); color: white; padding: 12px; text-align: center; font-weight: bold; position: sticky; top:0; z-index: 1000; }
+
+        .mesa-selector { display: flex; overflow-x: auto; gap: 8px; padding: 10px; background: #444; }
+        .btn-mesa { min-width: 50px; padding: 10px; border-radius: 8px; border: none; background: #666; color: white; font-weight: bold; position: relative; }
+        .btn-mesa.activa { background: var(--primary); border: 1px solid white; }
+        .btn-mesa.ocupada::after { content: ''; position: absolute; bottom: 4px; left: 15%; width: 70%; height: 4px; background: #ffeb3b; border-radius: 10px; }
+
+        .container { padding: 10px; padding-bottom: 220px; }
+        .cuenta-firme { background: #fffde7; padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #fbc02d; font-size: 13px; }
+        .item-firme { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 6px 0; }
+        .btn-del { background: #ff5252; color: white; border: none; border-radius: 5px; padding: 4px 8px; font-size: 10px; }
+
+        .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .producto-card { background: white; border-radius: 12px; padding: 10px; text-align: center; border: 1px solid #eee; }
+        .nombre-p { font-weight: bold; font-size: 13px; height: 32px; display: flex; align-items: center; justify-content: center; line-height: 1.1; }
+        .precio-p { color: var(--primary); font-weight: bold; font-size: 12px; }
+        .controles { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 8px; }
+        .btn-cant { width: 32px; height: 32px; border-radius: 8px; border: none; font-size: 20px; color: white; }
+
+        .footer-pos { position: fixed; bottom: 0; width: 100%; background: white; border-top: 2px solid var(--primary); padding: 15px; box-sizing: border-box; }
+        .total-display { font-size: 32px; font-weight: bold; text-align: center; color: var(--dark); margin-bottom: 10px; }
+        .btn-main { border: none; padding: 14px; border-radius: 10px; color: white; font-weight: bold; width: 100%; font-size: 14px; margin-bottom: 5px; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 3000; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 85%; max-width: 350px; padding: 20px; border-radius: 15px; font-family: monospace; max-height: 85vh; overflow-y: auto; white-space: pre-wrap; }
+        .logo-factura { display: block; width: 100px; height: auto; margin: 0 auto 10px; }
+        .input-box { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+    </style>
+</head>
+
+<body>
+
+<div class="navbar">ASADOS TRUCK</div>
+
+<div class="mesa-selector" id="lista-mesas"></div>
+
+<div class="container">
+    <div class="cuenta-firme">
+        <b>Mesa <span id="m-tit">1</span>:</b>
+        <div id="lista-firme"></div>
+    </div>
+
+    <div id="menu" class="menu-grid"></div>
+</div>
+
+<div class="footer-pos">
+    <div class="total-display" id="total-txt">$0</div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <button class="btn-main" style="background:var(--success)" onclick="cargarAMesa()">CARGAR</button>
+        <button class="btn-main" style="background:#007bff" onclick="verFactura()">FACTURA</button>
+    </div>
+
+    <button class="btn-main" style="background:var(--dark)" onclick="abrirCierre()">PAGAR Y CERRAR</button>
+</div>
+
+<!-- FACTURA -->
+<div id="modFact" class="modal">
+    <div class="modal-content">
+        <img src="logo.png" class="logo-factura" onerror="this.style.display='none'">
+        <div id="fact-body"></div>
+        <button class="btn-main" style="background:var(--dark)" onclick="closeModal('modFact')">VOLVER</button>
+    </div>
+</div>
+
+<!-- PAGO -->
+<div id="modPago" class="modal">
+    <div class="modal-content">
+        <h3 style="text-align:center;">PAGO MESA <span id="pago-m-num"></span></h3>
+
+        <p>Consumo: <b id="p-sub"></b></p>
+
+        Propina:
+        <input type="number" id="i-prop" class="input-box" oninput="recalc()">
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <button class="btn-main" id="o-efe" style="background:#eee; color:#333;" onclick="setM('Efectivo')">💵 EFE</button>
+            <button class="btn-main" id="o-tra" style="background:#eee; color:#333;" onclick="setM('Transfe')">📱 TRA</button>
+        </div>
+
+        <h2 id="p-tot" style="text-align:center; color:var(--success); margin:20px 0;"></h2>
+
+        <button class="btn-main" style="background:var(--success)" onclick="finalizar()">CONFIRMAR Y LIMPIAR</button>
+        <button class="btn-main" style="background:var(--dark)" onclick="closeModal('modPago')">CANCELAR</button>
+    </div>
+</div>
+
+<script>
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js");
+}
+
+/* ===== TU JS ORIGINAL ===== */
+
+const productos = [
+  { id: 1, nombre: "Chorizote", precio: 19000 },
+  { id: 2, nombre: "Chicharrón", precio: 25000 },
+  { id: 3, nombre: "Cerdo 3XL", precio: 25000 },
+  { id: 4, nombre: "Res 3XL", precio: 30000 },
+  { id: 5, nombre: "Churrasco", precio: 32000 },
+  { id: 6, nombre: "Costichip", precio: 33000 },
+  { id: 7, nombre: "Chorizo 3XL", precio: 35000 },
+  { id: 8, nombre: "Punta de Anca", precio: 36000 },
+  { id: 9, nombre: "Chicharrón D.T.", precio: 37000 },
+  { id: 10, nombre: "Bebidas", precio: 5000 },
+  { id: 11, nombre: "Cerveza", precio: 6000 },
+  { id: 12, nombre: "Chocolate", precio: 8000 },
+  { id: 13, nombre: "Arepa", precio: 3000 },
+  { id: 14, nombre: "Papa", precio: 3000 }
+];
+
+let mesasFirme = JSON.parse(localStorage.getItem('at_firme')) || {};
+let tempSel = {};
+let mesaActual = 1;
+let mPago = 'Efectivo';
+
+function init() {
+    const sel = document.getElementById('lista-mesas');
+
+    for(let i=1;i<=10;i++){
+        if(!mesasFirme[i]) mesasFirme[i]=[];
+        tempSel[i]={};
+        productos.forEach(p=>tempSel[i][p.id]=0);
+
+        sel.innerHTML += `<button class="btn-mesa" onclick="switchMesa(${i})" id="m${i}">M${i}</button>`;
+    }
+
+    switchMesa(1);
+}
+
+function switchMesa(n){
+    mesaActual=n;
+    document.querySelectorAll('.btn-mesa').forEach(b=>b.classList.remove('activa'));
+    document.getElementById('m'+n).classList.add('activa');
+    document.getElementById('m-tit').innerText=n;
+
+    renderMenu();
+    renderFirme();
+    updateTotal();
+}
+
+function renderMenu(){
+    const m=document.getElementById('menu');
+    m.innerHTML="";
+
+    productos.forEach(p=>{
+        const q=tempSel[mesaActual][p.id];
+
+        m.innerHTML+=`
+        <div class="producto-card">
+            <b>${p.nombre}</b>
+            <div>$${p.precio.toLocaleString()}</div>
+            <div class="controles">
+                <button onclick="qty(${p.id},-1)">-</button>
+                <b>${q}</b>
+                <button onclick="qty(${p.id},1)">+</button>
+            </div>
+        </div>`;
+    });
+}
+
+function qty(id,v){
+    if(tempSel[mesaActual][id]+v>=0){
+        tempSel[mesaActual][id]+=v;
+        renderMenu();
+        updateTotal();
+    }
+}
+
+function cargarAMesa(){
+    productos.forEach(p=>{
+        let q=tempSel[mesaActual][p.id];
+        if(q>0){
+            let ex=mesasFirme[mesaActual].find(i=>i.id===p.id);
+            if(ex) ex.cant+=q;
+            else mesasFirme[mesaActual].push({...p,cant:q});
+            tempSel[mesaActual][p.id]=0;
+        }
+    });
+    save();
+    renderMenu();
+    renderFirme();
+    updateTotal();
+}
+
+function renderFirme(){
+    const d=document.getElementById('lista-firme');
+    d.innerHTML="";
+    mesasFirme[mesaActual].forEach((i,idx)=>{
+        d.innerHTML+=`
+        <div>
+            ${i.cant}x ${i.nombre} - $${(i.cant*i.precio).toLocaleString()}
+            <button onclick="del(${idx})">X</button>
+        </div>`;
+    });
+}
+
+function del(i){
+    mesasFirme[mesaActual].splice(i,1);
+    save();
+    renderFirme();
+    updateTotal();
+}
+
+function updateTotal(){
+    let sub=0;
+    mesasFirme[mesaActual].forEach(i=>sub+=i.cant*i.precio);
+    productos.forEach(p=>{
+        sub+=p.precio*(tempSel[mesaActual][p.id]||0);
+    });
+    document.getElementById('total-txt').innerText="$"+sub.toLocaleString();
+}
+
+function verFactura(){
+    let sub=0;
+    let items=[...mesasFirme[mesaActual]];
+    items.forEach(i=>sub+=i.cant*i.precio);
+
+    let prop=Math.round(sub*0.1);
+
+    let txt="ASADOS TRUCK\nMESA "+mesaActual+"\n\n";
+    items.forEach(i=>{
+        txt+=`${i.cant}x ${i.nombre} = $${(i.cant*i.precio).toLocaleString()}\n`;
+    });
+
+    txt+=`\nSUB: $${sub.toLocaleString()}`;
+    txt+=`\nPROP: $${prop.toLocaleString()}`;
+    txt+=`\nTOTAL: $${(sub+prop).toLocaleString()}`;
+
+    document.getElementById('fact-body').innerText=txt;
+    document.getElementById('modFact').style.display='flex';
+}
+
+function abrirCierre(){
+    let sub=0;
+    mesasFirme[mesaActual].forEach(i=>sub+=i.cant*i.precio);
+
+    document.getElementById('p-sub').innerText="$"+sub.toLocaleString();
+    document.getElementById('i-prop').value=Math.round(sub*0.1);
+    document.getElementById('modPago').style.display='flex';
+}
+
+function recalc(){
+    let s=Number(document.getElementById('p-sub').innerText.replace(/\D/g,''));
+    let p=Number(document.getElementById('i-prop').value);
+    document.getElementById('p-tot').innerText="$"+(s+p).toLocaleString();
+}
+
+function setM(m){mPago=m;}
+
+function finalizar(){
+    mesasFirme[mesaActual]=[];
+    save();
+    closeModal('modPago');
+    switchMesa(mesaActual);
+}
+
+function save(){
+    localStorage.setItem('at_firme',JSON.stringify(mesasFirme));
+}
+
+function closeModal(id){
+    document.getElementById(id).style.display='none';
+}
+
+init();
+</script>
+
+</body>
+</html>
