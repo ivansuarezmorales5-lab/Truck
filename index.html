@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASADOS TRUCK</title>
+
+<link rel="manifest" href="manifest.json">
+
+<style>
+body{margin:0;font-family:sans-serif;background:#f2f2f2;}
+.navbar{background:#222;color:#fff;text-align:center;padding:12px;font-weight:bold;}
+
+.mesas{display:flex;gap:8px;padding:10px;background:#444;overflow-x:auto;}
+.mesa{padding:10px;border:none;border-radius:8px;background:#666;color:#fff;}
+.mesa.activa{background:#d32f2f;}
+
+.container{padding:10px;padding-bottom:200px;}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+.card{background:#fff;padding:10px;border-radius:10px;text-align:center;}
+
+.precio{color:#d32f2f;font-weight:bold;}
+
+.btns{display:flex;justify-content:center;gap:10px;margin-top:5px;}
+
+button{border:none;padding:8px;border-radius:8px;font-weight:bold;}
+
+.footer{
+position:fixed;bottom:0;width:100%;background:#fff;
+padding:10px;border-top:2px solid #d32f2f;
+}
+
+.total{text-align:center;font-size:26px;font-weight:bold;}
+
+.factura{
+display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+justify-content:center;align-items:center;
+}
+
+.ticket{
+background:#fff;width:90%;max-width:340px;
+padding:18px;font-family:monospace;
+}
+
+.line{border-top:1px dashed #aaa;margin:10px 0;}
+
+.row{display:flex;justify-content:space-between;font-size:13px;}
+
+.gray{color:#777;font-size:12px;}
+
+.totalBig{
+text-align:center;
+font-size:28px;
+font-weight:bold;
+color:#111;
+margin-top:8px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="navbar">ASADOS TRUCK</div>
+
+<div class="mesas" id="mesas"></div>
+
+<div class="container">
+<h3>Mesa <span id="mesaAct">1</span></h3>
+<div class="grid" id="lista"></div>
+</div>
+
+<div class="footer">
+
+<div class="total" id="total">$0</div>
+
+<button onclick="cargarMesa()" style="background:#28a745;color:#fff;width:100%">
+CARGAR
+</button>
+
+<button onclick="factura()" style="background:#007bff;color:#fff;width:100%;margin-top:5px">
+FACTURA
+</button>
+
+<button onclick="cerrarMesa()" style="background:#222;color:#fff;width:100%;margin-top:5px">
+CERRAR MESA
+</button>
+
+</div>
+
+<!-- FACTURA -->
+<div class="factura" id="modal">
+<div class="ticket">
+
+<div style="text-align:center;font-weight:bold;font-size:14px">
+ASADOS TRUCK
+</div>
+
+<div style="text-align:center;font-size:12px;color:#777" id="fecha"></div>
+
+<div class="line"></div>
+
+<div id="fact"></div>
+
+<div class="line"></div>
+
+<div class="gray" style="text-align:center">
+Gracias por su compra
+</div>
+
+<button onclick="document.getElementById('modal').style.display='none'"
+style="background:#222;color:#fff;width:100%;margin-top:10px">
+CERRAR
+</button>
+
+</div>
+</div>
+
+<script>
+
+/* 🟢 SERVICE WORKER (YA INCLUIDO AQUÍ MISMO) */
+if ("serviceWorker" in navigator) {
+navigator.serviceWorker.register("./sw.js");
+}
+
+/* PRODUCTOS */
+const productos=[
+{ id:1,nombre:"Chorizo",precio:19000 },
+{ id:2,nombre:"Chicharrón",precio:25000 },
+{ id:3,nombre:"Cerdo 3XL",precio:25000 },
+{ id:4,nombre:"Res 3XL",precio:30000 },
+{ id:5,nombre:"Churrasco",precio:32000 },
+{ id:6,nombre:"Costichip",precio:33000 },
+{ id:7,nombre:"Chorizo 3XL",precio:35000 },
+{ id:8,nombre:"Punta de Anca",precio:36000 },
+{ id:9,nombre:"Chicharrón D.T.",precio:37000 },
+{ id:10,nombre:"Bebidas",precio:5000 },
+{ id:11,nombre:"Cerveza",precio:6000 },
+{ id:12,nombre:"Chocolate",precio:8000 },
+{ id:13,nombre:"Arepa",precio:3000 },
+{ id:14,nombre:"Papa",precio:3000 }
+];
+
+let mesas={},temp={},mesaActual=1;
+
+function init(){
+
+let m=document.getElementById("mesas");
+
+for(let i=1;i<=10;i++){
+mesas[i]=[];
+temp[i]={};
+
+productos.forEach(p=>temp[i][p.id]=0);
+
+m.innerHTML+=`<button class="mesa" id="m${i}" onclick="cambiar(${i})">M${i}</button>`;
+}
+
+cambiar(1);
+}
+
+function cambiar(n){
+
+mesaActual=n;
+
+document.querySelectorAll(".mesa").forEach(b=>b.classList.remove("activa"));
+document.getElementById("m"+n).classList.add("activa");
+
+document.getElementById("mesaAct").innerText=n;
+
+render();
+total();
+}
+
+function render(){
+
+let l=document.getElementById("lista");
+l.innerHTML="";
+
+productos.forEach(p=>{
+
+let q=temp[mesaActual][p.id];
+
+l.innerHTML+=`
+<div class="card">
+<b>${p.nombre}</b>
+<div class="precio">$${p.precio.toLocaleString()}</div>
+
+<div class="btns">
+<button onclick="add(${p.id},-1)">-</button>
+<b>${q}</b>
+<button onclick="add(${p.id},1)">+</button>
+</div>
+
+</div>`;
+});
+}
+
+function add(id,v){
+if(temp[mesaActual][id]+v>=0){
+temp[mesaActual][id]+=v;
+render();
+total();
+}
+}
+
+function cargarMesa(){
+
+productos.forEach(p=>{
+let q=temp[mesaActual][p.id];
+
+if(q>0){
+let ex=mesas[mesaActual].find(i=>i.id===p.id);
+
+if(ex) ex.cant+=q;
+else mesas[mesaActual].push({
+nombre:p.nombre,
+cant:q,
+precio:p.precio
+});
+
+temp[mesaActual][p.id]=0;
+}
+});
+
+render();
+total();
+}
+
+function total(){
+
+let t=0;
+
+mesas[mesaActual].forEach(i=>t+=i.cant*i.precio);
+
+productos.forEach(p=>{
+t+=temp[mesaActual][p.id]*p.precio;
+});
+
+document.getElementById("total").innerText="$"+t.toLocaleString();
+}
+
+/* 🧾 FACTURA EXACTA TIPO TICKET */
+function factura(){
+
+let sub=0;
+let items=[...mesas[mesaActual]];
+
+productos.forEach(p=>{
+if(temp[mesaActual][p.id]>0){
+items.push({
+nombre:p.nombre,
+cant:temp[mesaActual][p.id],
+precio:p.precio
+});
+}
+});
+
+items.forEach(i=>sub+=i.cant*i.precio);
+
+document.getElementById("fecha").innerText =
+new Date().toLocaleString();
+
+let html="";
+
+items.forEach(i=>{
+html+=`
+<div class="row">
+<div>${i.cant}x ${i.nombre}</div>
+<div>$${(i.cant*i.precio).toLocaleString()}</div>
+</div>`;
+});
+
+let servicio=Math.round(sub*0.1);
+let total=sub+servicio;
+
+html+=`<div class="line"></div>`;
+
+html+=`
+<div class="row"><div>Subtotal</div><div>$${sub.toLocaleString()}</div></div>
+`;
+
+html+=`
+<div class="gray">Servicio</div>
+<div class="row"><div></div><div>$${servicio.toLocaleString()}</div></div>
+`;
+
+html+=`<div class="line"></div>`;
+
+html+=`
+<div class="totalBig">$${total.toLocaleString()}</div>
+`;
+
+document.getElementById("fact").innerHTML=html;
+document.getElementById("modal").style.display="flex";
+}
+
+/* 🔥 CERRAR MESA SIMPLE */
+function cerrarMesa(){
+
+mesas[mesaActual]=[];
+
+for(let p of productos){
+temp[mesaActual][p.id]=0;
+}
+
+render();
+total();
+alert("Mesa cerrada");
+}
+
+init();
+
+</script>
+
+</body>
+</html>
